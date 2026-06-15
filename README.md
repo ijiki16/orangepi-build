@@ -21,3 +21,6 @@ Soc | Boards |
 
 ## Supported Host Systems
 - Ubuntu 22.04
+
+## Build script documentation
+- See `BUILD_SCRIPT.md` for detailed usage and configuration of `build.sh`.
