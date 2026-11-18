@@ -52,6 +52,15 @@ else
 	if [[ -n "$gw" ]] && ping -c2 -W2 "$gw" > /dev/null 2>&1; then pass "gateway $gw answers"; else fail "gateway ${gw:-missing} does not answer"; fi
 fi
 
+# HDMI. A monitor is optional, so its state is only reported.
+grep -q '^sunxidrm ' /proc/modules && pass "HDMI driver loaded" || fail "HDMI driver sunxidrm not loaded"
+[[ -e /dev/dri/card0 ]] && pass "DRM device /dev/dri/card0" || fail "/dev/dri/card0 missing"
+hdmi=/sys/class/drm/card0-HDMI-A-1
+info "HDMI $(cat "$hdmi/status" 2> /dev/null), first mode $(head -1 "$hdmi/modes" 2> /dev/null)"
+if [[ "$(cat "$hdmi/status" 2> /dev/null)" == connected ]]; then
+	[[ -e /dev/fb0 ]] && pass "framebuffer /dev/fb0" || fail "/dev/fb0 missing with a monitor connected"
+fi
+
 # SD card health.
 ios=/sys/kernel/debug/mmc2/ios
 [[ -r $ios ]] && info "SD $(grep 'actual clock' "$ios" | tr -s '\t ' ' ')"
