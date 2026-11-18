@@ -13,11 +13,12 @@ Tested on one Orange Pi 4 Pro (12 GB) running Armbian trixie `edge` from a 64 GB
 | Boot from SD through the vendor boot0 and U-Boot | Works |
 | Serial console (ttyS0, 115200) | Works |
 | NVMe (PCIe) | Detected; not used as rootfs in this setup |
-| Ethernet | Works at 100 Mb/s: DHCP, ping, DNS, SSH. **Gigabit is untested** (the switch offers 10/100 only) |
+| Ethernet | Works at 100 Mb/s with a stable MAC address. **Gigabit is untested** (the switch offers 10/100 only) |
 | PMIC (AXP318W) | Works: the kernel powers the Ethernet PHY and SD card |
 | Clock rates | Correct: `pll-ref` 24 MHz, `pll-peri0` 2.4 GHz |
-| HDMI | **Not working.** `sunxi-drm-port` does not build on 7.4 |
-| Wi-Fi and Bluetooth | **Not working.** The AIC8800 modules are not ported |
+| HDMI | Works at 1920x1080@60 with a framebuffer console |
+| Wi-Fi | Works: tested on a 5 GHz WPA2 network at about 80 Mb/s |
+| Bluetooth | Starts at boot and scans. **Pairing and audio are untested** |
 | GPU | **Disabled.** `powervr.ko` hangs the board on probe |
 | SD UHS speeds | Not available. The switchable SD I/O rail (vqmmc) is not described, so SD runs at 3.3 V, 50 MHz |
 
@@ -27,7 +28,7 @@ The kernel packages were tested by installing them on a running board. The final
 
 | Repo | Branch | Contents |
 |---|---|---|
-| [ijiki16/orangepi4pro-linux](https://github.com/ijiki16/orangepi4pro-linux) | `rebase-7.4-rc3` | 35 patches on torvalds `666539eecdf4` (7.4-rc3+) in `kernel/patches/` |
+| [ijiki16/orangepi4pro-linux](https://github.com/ijiki16/orangepi4pro-linux) | `rebase-7.4-rc3` | 42 patches on torvalds `666539eecdf4` (7.4-rc3+) in `kernel/patches/` |
 | [ijiki16/build](https://github.com/ijiki16/build) | `sun60iw2-mainline-edge` | Armbian `edge` branch: the 35 patches plus one Armbian-only dts patch |
 | `~/code/linux-a733` (local) | `a733-rebased` | The kernel tree the patches are exported from |
 
@@ -190,9 +191,9 @@ GMAC registers read `0xffff` while the interface is down, because its clocks are
 
 | | PR #10712 | This port |
 |---|---|---|
-| Kernel | 7.2.7 + 56 patches | 7.4-rc3+ + 35 patches |
+| Kernel | 7.2.7 + 56 patches | 7.4-rc3+ + 42 patches |
 | Boot chain | Mainline U-Boot v2026.07 and TF-A | Vendor boot0, U-Boot 2018 and BL31 |
-| Reported working | Gigabit Ethernet, Wi-Fi/BT, USB3, HDMI through simplefb, NPU, SPI-NOR | SD, NVMe detection, Ethernet at 100 Mb/s, PMIC |
+| Reported working | Gigabit Ethernet, Wi-Fi/BT, USB3, HDMI through simplefb, NPU, SPI-NOR | SD, NVMe detection, Ethernet at 100 Mb/s, PMIC, HDMI, Wi-Fi, Bluetooth |
 
 The AXP318W patches here (0029–0033) come from that PR's patch set. Its board dts uses the compatible `x-powers,axp8191`, which has no kernel driver in the PR. This port uses `x-powers,axp318w`.
 
@@ -204,5 +205,5 @@ Both ports add an `edge` branch for `orangepi4pro` with the same file names, so 
 - Test gigabit Ethernet.
 - Move the Ethernet, SD and PMIC fixes from the SD dts into the board dts. The NVMe board dts still has the PA14 reset and no PMIC node.
 - Describe the SD I/O rail (vqmmc) to enable UHS speeds.
-- Port `sunxi-drm-port` to 7.4 for HDMI, and rebuild the AIC8800 modules for Wi-Fi and Bluetooth.
+- Test Bluetooth pairing and audio.
 - Remove the early-boot debug patches (0015–0017) from the series.
