@@ -96,6 +96,10 @@ Say which kernel a claim applies to. "Works on the 4 Pro" is true for the vendor
 
 The code is in `ijiki16/orangepi4pro-linux` (branch `rebase-7.4-rc3`) and `ijiki16/build` (branch `sun60iw2-mainline-edge`). `docs/a733/mainline.md` has the build commands, board facts, register addresses and the full failure table.
 
+For a kernel change on a board that is already set up, run `bash opi-test.sh kernel` from this skill's folder and stop here. It builds, installs, reboots and runs the health check. Exit status 0 means pass; `docs/a733/mainline.md` lists the others.
+
+For a full image:
+
 1. Build from the `sun60iw2-mainline-edge` checkout:
    ```bash
    ./compile.sh build BOARD=orangepi4pro BRANCH=edge RELEASE=trixie BUILD_MINIMAL=no BUILD_DESKTOP=no KERNEL_CONFIGURE=no COMPRESS_OUTPUTIMAGE=sha,img
