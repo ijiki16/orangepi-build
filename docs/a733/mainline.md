@@ -60,6 +60,40 @@ make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)" Image dtbs modules
 ```
 
+## Automated kernel test
+
+`opi-test.sh` builds the committed kernel, installs it on the board over SSH, reboots and runs the health check:
+
+```bash
+S=.claude/skills/orangepi-a733-image-build
+bash $S/opi-test.sh setup    # once: create the SSH key, then run the ssh-copy-id command it prints
+bash $S/opi-test.sh kernel   # build + deploy + check
+```
+
+- The script finds the board by scanning the LAN, because the MAC address and IP change on every boot.
+- Each run saves its logs in `~/code/orangepi4pro-sd/runs/`.
+- The previous kernel is kept on the board in `/root/opi-test/last`.
+- If the board does not return within 5 minutes, the script stops. Power-cycle the board by hand.
+
+| Exit status | Meaning |
+|---|---|
+| 0 | New kernel running, all checks passed |
+| 1 | A health check failed, or a different kernel is running |
+| 2 | Usage or setup problem |
+| 3 | The board did not come back |
+| 4 | The build failed |
+
+## Serial logs per boot
+
+`uart-boots.py` saves the serial console as readable text, with one file per boot and a new part every 5 MB:
+
+```bash
+setsid nohup python3 -I .claude/skills/orangepi-a733-image-build/uart-boots.py --dir ~/uart-boots > /dev/null 2>&1 &
+tail -f ~/uart-boots/latest.log
+```
+
+Only one program can read the serial port reliably. `opi-test.sh` leaves the port alone while the logger runs.
+
 ## Checking a running board
 
 Copy the script to the board and run it there. It only reads state:
