@@ -20,7 +20,7 @@ Tested on one Orange Pi 4 Pro (12 GB) running Armbian trixie `edge` from a 64 GB
 | Wi-Fi | Works: tested on a 5 GHz WPA2 network at about 80 Mb/s |
 | Bluetooth | Starts at boot and scans. **Pairing and audio are untested** |
 | USB | Works at USB 2.0 speed: the hub ports, the OTG port in host mode and the DWC3 port. USB 3.0 speed needs the combo PHY driver |
-| SPI-NOR flash | Read-only. **Some reads are corrupted** (no DMA) |
+| SPI-NOR flash | Works with DMA at 50 MHz, 6.2 MB/s. Kept read-only |
 | RTC and ADC | Work |
 | CPU frequency scaling | **Not enabled.** The CPU regulator is not identified; clocks report 1776 MHz |
 | GPU | **Disabled.** `powervr.ko` hangs the board on probe |
@@ -32,7 +32,7 @@ The kernel packages were tested by installing them on a running board. The final
 
 | Repo | Branch | Contents |
 |---|---|---|
-| [ijiki16/orangepi4pro-linux](https://github.com/ijiki16/orangepi4pro-linux) | `rebase-7.4-rc3` | 46 patches on torvalds `666539eecdf4` (7.4-rc3+) in `kernel/patches/` |
+| [ijiki16/orangepi4pro-linux](https://github.com/ijiki16/orangepi4pro-linux) | `rebase-7.4-rc3` | 50 patches on torvalds `666539eecdf4` (7.4-rc3+) in `kernel/patches/` |
 | [ijiki16/build](https://github.com/ijiki16/build) | `sun60iw2-mainline-edge` | Armbian `edge` branch: the 35 patches plus one Armbian-only dts patch |
 | `~/code/linux-a733` (local) | `a733-rebased` | The kernel tree the patches are exported from |
 
@@ -195,7 +195,7 @@ GMAC registers read `0xffff` while the interface is down, because its clocks are
 
 | | PR #10712 | This port |
 |---|---|---|
-| Kernel | 7.2.7 + 56 patches | 7.4-rc3+ + 46 patches |
+| Kernel | 7.2.7 + 56 patches | 7.4-rc3+ + 50 patches |
 | Boot chain | Mainline U-Boot v2026.07 and TF-A | Vendor boot0, U-Boot 2018 and BL31 |
 | Reported working | Gigabit Ethernet, Wi-Fi/BT, USB3, HDMI through simplefb, NPU, SPI-NOR | SD, NVMe detection, Ethernet at 100 Mb/s, PMIC, HDMI, Wi-Fi, Bluetooth |
 

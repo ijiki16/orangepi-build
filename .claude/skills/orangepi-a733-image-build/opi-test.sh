@@ -239,7 +239,7 @@ booted_slot() { board 'sed -n "s/.*opi_slot=\([a-z]*\).*/\1/p" /proc/cmdline'; }
 
 deploy_trial() { # deploy_trial <expected /proc/version>: install as a trial slot and boot it once
 	local slot result
-	[[ "$(booted_slot)" == good ]] || die 2 "the board runs its trial slot. Reboot it to the good slot first."
+	# opi-slot try refuses unless the board runs the good slot's root (a promoted trial counts).
 	board 'opi-slot try /root/opi-test/linux-image.deb /root/opi-test/linux-dtb.deb' > "$RUN/opi-slot.log" 2>&1 ||
 		die 2 "opi-slot try failed, see $RUN/opi-slot.log"
 	say "$(tail -1 "$RUN/opi-slot.log")"
