@@ -6,6 +6,11 @@
 #   opi-test.sh deploy           install the newest build on the board, reboot, run the checks
 #   opi-test.sh check            run the health check on the running board
 #   opi-test.sh kernel           build + deploy
+#   opi-test.sh rollback         on an A/B board: make the previous good kernel the good one, reboot
+#
+# On a board with A/B slots (ab-boot/ in the orangepi4pro-linux repo, the opi-slot tool), deploy
+# installs the kernel as a trial slot: a kernel that fails to boot falls back to the good one,
+# so no reflash is needed. Other boards get the kernel through dpkg.
 #
 # Exit status: 0 pass, 1 health check failed, 2 usage or setup problem, 3 board did not come back,
 # 4 build failed.
@@ -175,13 +180,20 @@ cmd_deploy() {
 	want="$(dpkg-deb --fsys-tarfile "$IMAGE_DEB" 2> /dev/null | tar -xO "./boot/vmlinuz-$kver" 2> /dev/null | LC_ALL=C grep -aoE 'Linux version [^%]* #[0-9]+ [^%]*' | head -1)"
 	[[ -n "$want" ]] || die 2 "cannot read the version string from the kernel image"
 
-	board "mkdir -p /root/opi-test && rm -rf /root/opi-test/last && mkdir /root/opi-test/last &&
-		cp -a /boot/vmlinuz-$kver /boot/uInitrd-$kver /boot/dtb-$kver /root/opi-test/last/" ||
-		die 2 "could not back up the running kernel on the board"
+	board "mkdir -p /root/opi-test" || die 2 "cannot reach the board"
+	if ! board 'command -v opi-slot' > /dev/null 2>&1; then
+		board "rm -rf /root/opi-test/last && mkdir /root/opi-test/last &&
+			cp -a /boot/vmlinuz-$kver /boot/uInitrd-$kver /boot/dtb-$kver /root/opi-test/last/" ||
+			die 2 "could not back up the running kernel on the board"
+	fi
 	scp "${SSH_OPTS[@]}" -q "$IMAGE_DEB" "root@$BOARD_IP:/root/opi-test/linux-image.deb" || die 2 "copy failed"
 	scp "${SSH_OPTS[@]}" -q "$DTB_DEB" "root@$BOARD_IP:/root/opi-test/linux-dtb.deb" || die 2 "copy failed"
 	[[ "$(sha256sum < "$IMAGE_DEB")" == "$(board 'sha256sum < /root/opi-test/linux-image.deb')" ]] || die 2 "image package checksum mismatch"
 	[[ "$(sha256sum < "$DTB_DEB")" == "$(board 'sha256sum < /root/opi-test/linux-dtb.deb')" ]] || die 2 "dtb package checksum mismatch"
+	if board 'command -v opi-slot' > /dev/null 2>&1; then
+		deploy_trial "$want"
+		return
+	fi
 	board 'dpkg -i /root/opi-test/linux-image.deb /root/opi-test/linux-dtb.deb && sync' > "$RUN/dpkg.log" 2>&1 ||
 		die 2 "dpkg failed, see $RUN/dpkg.log"
 
@@ -206,8 +218,67 @@ cmd_deploy() {
 	cmd_check
 }
 
+reboot_and_wait() { # reboot_and_wait <message if the board does not return>
+	start_uart
+	say "rebooting"
+	timeout 15 ssh "${SSH_OPTS[@]}" "root@$BOARD_IP" 'systemctl reboot' > /dev/null 2>&1
+	local deadline=$((SECONDS + 60))
+	while is_board "$BOARD_IP" && ((SECONDS < deadline)); do sleep 2; done
+	deadline=$((SECONDS + BOOT_TIMEOUT))
+	until find_board; do
+		if ((SECONDS >= deadline)); then
+			stop_uart
+			die 3 "board did not return within ${BOOT_TIMEOUT}s. $1 Serial log: $UART_LOG"
+		fi
+		sleep 5
+	done
+	stop_uart
+}
+
+booted_slot() { board 'sed -n "s/.*opi_slot=\([a-z]*\).*/\1/p" /proc/cmdline'; }
+
+deploy_trial() { # deploy_trial <expected /proc/version>: install as a trial slot and boot it once
+	local slot result
+	[[ "$(booted_slot)" == good ]] || die 2 "the board runs its trial slot. Reboot it to the good slot first."
+	board 'opi-slot try /root/opi-test/linux-image.deb /root/opi-test/linux-dtb.deb' > "$RUN/opi-slot.log" 2>&1 ||
+		die 2 "opi-slot try failed, see $RUN/opi-slot.log"
+	say "$(tail -1 "$RUN/opi-slot.log")"
+	reboot_and_wait "Power-cycle it: an armed trial that hangs early falls back to the good slot on the next boot."
+	# The confirm service decides when the boot has reached multi-user.target.
+	board 'timeout 240 sh -c "while systemctl is-active -q opi-slot-confirm || systemctl list-jobs --no-legend | grep -q opi-slot-confirm; do sleep 3; done"'
+	slot="$(booted_slot)"
+	result="$(board 'journalctl -b -u opi-slot-confirm -o cat --no-pager | grep "opi-slot:" | tail -1')"
+	board 'opi-slot status' > "$RUN/opi-slot-status.log" 2>&1
+	say "booted slot $slot: ${result#opi-slot: }"
+	case "$slot:$result" in
+		trial:*"now the good slot"*)
+			[[ "$(board 'cat /proc/version')" == "$1"* ]] || die 1 "the trial slot runs an unexpected kernel"
+			say "running the new kernel on $BOARD_IP (promoted to the good slot)"
+			;;
+		trial:*)
+			die 1 "the new kernel booted but did not pass the confirm check. The next boot uses the good slot. See $RUN/opi-slot-status.log"
+			;;
+		*)
+			die 1 "the new kernel failed and the board fell back to the good slot. Serial log: ${UART_LOG:-none}. The failed slot is kept in /boot/failed-*"
+			;;
+	esac
+	cmd_check
+}
+
+cmd_rollback() {
+	need_key
+	[[ -n "${RUN:-}" ]] || new_run rollback
+	find_board || die 3 "board not found"
+	board 'command -v opi-slot' > /dev/null 2>&1 || die 2 "this board has no A/B slots"
+	board 'opi-slot rollback' || die 1 "rollback failed"
+	reboot_and_wait "Power-cycle it."
+	board 'opi-slot status'
+	cmd_check
+}
+
 case "${1:-}" in
 	setup) cmd_setup ;;
+	rollback) cmd_rollback ;;
 	build) cmd_build ;;
 	deploy) cmd_deploy ;;
 	check) cmd_check ;;
@@ -216,7 +287,7 @@ case "${1:-}" in
 		cmd_deploy
 		;;
 	*)
-		sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
 		exit 2
 		;;
 esac
